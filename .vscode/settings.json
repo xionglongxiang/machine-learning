@@ -1,0 +1,30 @@
+{
+  "files.exclude": {
+    "__pycache__": true,
+    ".babelrc": true,
+    ".editorconfig": true,
+    ".gitignore": true,
+    ".idea": true,
+    ".ipynb_checkpoints": true,
+    ".postcssrc.js": true,
+    ".vscode": true,
+    "**/.DS_Store": true,
+    "**/.git": true,
+    "**/.hg": true,
+    "**/.svn": true,
+    "**/*.class": true,
+    "**/*.pyc": true,
+    "**/CVS": true,
+    "node_modules": true,
+    "package.swan.json": true,
+    "project.swan.json": true,
+    "static": true,
+    "ux/dist": true
+  },
+  "jupyter.allowUnauthorizedRemoteConnection": true,
+  "jupyter.changeDirOnImportExport": true,
+  "jupyter.alwaysTrustNotebooks": true,
+  "jupyter.jupyterCommandLineArguments": [
+  
+  ]
+}
