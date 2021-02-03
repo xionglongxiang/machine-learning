@@ -1,8 +1,6 @@
 import numpy as np
 
-from metrics import accuracy_score
-from sklearn import datasets
-from model_selection import train_test_split
+from metrics.metrics import accuracy_score
 
 
 class LogisticRegression:
