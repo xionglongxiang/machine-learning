@@ -1,0 +1,547 @@
+
+泰坦尼克号事故生存预测
+说明：
+
+1. 本章节实验步骤已融合在右侧环境，请开启环境后直接在右侧环境的 空白单元格 处输入代码做实验
+2. 若想仅查看实验步骤，请点击下方展开实验步骤
+点击收起步骤
+泰坦尼克事故生存预测
+介绍
+想必很多人都听说过泰坦尼克号，且许多人也可能都在电影院看过这部电影。本次实验正是与泰坦尼克号相关，即泰坦尼克号存活率预测，其是 Kaggle 一个比较经典的入门项目。不同于上一个实验，上一个实验是一个回归任务，而本次实验则是一个分类任务。
+
+知识点
+相关性分析
+缺失值填充
+逻辑回归
+泰坦尼克号介绍
+本实验同样来源于 Kaggle 的入门项目之一  泰坦尼克号存活率预测 。下面我们来对其进行简要讲述一下。
+
+泰坦尼克号的沉没是历史上最著名的沉船事件之一。 1912 年 4 月 15 日，泰坦尼克号在处女航中撞上冰山沉没，2224 名乘客和船员中 1502 人遇难。这一耸人听闻的悲剧震惊了当时的国际社会。
+
+图片描述
+
+沉船造成如此巨大人员伤亡的原因之一是没有足够的救生艇来容纳乘客和船员。虽然在沉船事件中幸存下来也有一些运气的因素，但有些人比其他人更有可能幸存下来，比如妇女、儿童和上层阶级。
+
+而存活率预测就是对船上的乘客进行分析，预测乘客是否在这场灾难中存活下来，即运用机器学习工具来预测哪些乘客在灾难中幸存下来。
+
+数据预览
+首先安装实验需要的 statsmodels 包。
+
+!pip install statsmodels==0.9.0
+copy
+现在导入实验所必须的库。
+
+import numpy as np
+import random as rnd
+import warnings
+warnings.filterwarnings("ignore")
+copy
+数据来源于 Kaggle 提供的数据分析入门竞赛数据，首先执行导入。
+
+import pandas as pd
+
+df = pd.read_csv(
+    'https://labfile.oss.aliyuncs.com/courses/1363/Titanic.csv')  # 读取数据
+copy
+
+copy
+查看数据的前 5 份。
+
+df.head()
+copy
+
+copy
+从上面的结果可以看到，在这些列中数值型和类别型特征的列分别为：
+
+数值型： Age, Fare. Discrete: SibSp, Parch；
+类别型： Survived, Sex, and Embarked. Ordinal: Pclass.
+关于这些列分别代表什么意思可以查看 Kaggle 提供的  数据说明 。
+
+现在先来看数据的整体信息。
+
+df.info()
+copy
+
+copy
+从上面结果可以看出，Survived 和 Pclass 等为 int 型，Name 和 Sex 等为 object 型。
+
+df.describe()
+copy
+
+copy
+从上面的结果可以知道每一份数值型特征的基本统计信息，包括计数（count）、均值（mean）、方差（std）等。但上的描述并没有类别型的特征，我们可以使用下面代码来查看类别型的特征。
+
+df.describe(include=['O'])
+copy
+
+copy
+从上面的结果可以看到，名字特征列（name）可以取 891 个不同的值，这意味着每位乘客的名字都不一样，与事实相符。同时还可以看到，性别（sex）含有两类，其中男性（male） 有 577 个。其他列的情况可以以此类推。
+
+数据清洗
+与上一个实验一样，我们先来看数据是否存在缺失值。
+
+df.isnull().sum()
+copy
+
+copy
+从上面的结果可以看到，总共有三个列存在缺失值，分别是年龄（Age）、客舱（Cabin）、登船港（Embarked），现在先对缺失值做填充，再做后面的分析。
+
+df['Age'].fillna(df['Age'].median(), inplace=True)
+
+df['Embarked'].fillna(df['Embarked'].mode()[0], inplace=True)
+copy
+
+copy
+从直观上来判断，船舱号跟是否存活没有多大的关系，因此这直接删除掉该列。同样的道理，也删除乘客编号（PassengerId）和船票号列（Ticket）。
+
+drop_column = ['PassengerId', 'Cabin', 'Ticket']
+df_drop = df.drop(drop_column, axis=1)
+copy
+
+copy
+现在再来看数据中是否还存在缺失值。
+
+df_drop.isnull().sum()
+copy
+
+copy
+数据挖掘
+现在对数进行挖掘，通过原始数据挖掘出可能与存活率相关的信息。原始数据集的 SibSp 列表示的是家庭人数，即一个乘客含有多少个兄弟姐妹或配偶，在Parch 列中，记录的是一个乘客含有多少个父母或孩子。将这两者相加，再加上他自己就可以得到一个家庭的总人数。提取这个特征的原因是，有可能获救的人都是一个家庭的。
+
+df_drop['FamilySize'] = df_drop['SibSp'] + df_drop['Parch'] + 1
+df_drop['FamilySize'].value_counts()
+copy
+
+copy
+同时我们也为那些单身汉准备了一列，即创造一列来存放判断一个人是否是单身汉。
+
+df_drop['IsAlone'] = 1
+df_drop['IsAlone'].loc[df_drop['FamilySize'] > 1] = 0
+df_drop['IsAlone'].value_counts()
+copy
+
+copy
+在 Name 列中，我们可以发现，许多人的名字会加上 Mr、Miss、Mrs 等称呼，不同的称呼代表不同的人群，所以有可能不同的人群的存活率会有所不同。因此，我们可以提取这些信息作为一个新的特征列。
+
+df_drop['Title'] = df_drop['Name'].str.split(
+    ", ", expand=True)[1].str.split(".", expand=True)[0]
+copy
+
+copy
+查看都能从名字中提取到什么。
+
+df_drop['Title'].value_counts()
+copy
+
+copy
+可以看到，Mr、Miss、Mrs、Master 等出现的次数最多，而像 Jonkheer 等都只出现一次。这里将出现少于 10 次的选项都合并为一个 Misc 选项。
+
+stat_min = 10
+# 找到少于 10 个的列名
+title_names = (df_drop['Title'].value_counts() < stat_min)
+# 替换列名
+df_drop['Title'] = df_drop['Title'].apply(
+    lambda x: 'Misc' if title_names.loc[x] == True else x)
+print(df_drop['Title'].value_counts())
+print("-"*10)
+copy
+
+copy
+通过上面的处理，我们手工提取的特征列 Title 可取的只有 5 个。
+
+在数据中，有一个特征列为年龄（Age），该列是一个连续的特征值，现在将其切分为五个等级，分别儿童、少年、青年、中年、老年。这样就将 Age 划分为了类别型特征。这里主要通过 Pandas 提供的等距划分 cut 方法来完成。
+
+df_drop['AgeBin'] = pd.cut(df_drop['Age'].astype(int), 5)
+df_drop['AgeBin'].value_counts()
+copy
+
+copy
+从上面的统计结果可以看到，16 岁到 32 岁的人最多。而 64 岁到 80 岁的人只有 11 个。现在同样的方法，对票价特征列（Fare）进行划分，这里按照数据出现频率百分比划分，比如要把数据分为四份，则四段分别是数据的0-25%，25%-50%，50%-75%，75%-100%。可直接使用 Pandas 提供的 qcut 方法来完成。
+
+df_drop['FareBin'] = pd.qcut(df_drop['Fare'], 4)
+df_drop['FareBin'].value_counts()
+copy
+
+copy
+从上面的结果可以看到，票价为 7.91 到 14.454 的人共有 224 人，14.454 到 31 总共有 222 人 这两个区间的人占了差不多一半。说明大多数人都是买的普通价格船票。
+
+df_drop.head()
+copy
+
+copy
+数据可视化
+上面主要完成了两个主要的工作，即数据的导入和数据的清洗。现在为了能更进一步的了解数据，我们对其进行可视化。
+
+先来看性别与是否存活的关系。
+
+df_drop[['Sex', 'Survived']].groupby('Sex', as_index=False).mean()
+copy
+
+copy
+在数据集中中，女性能够获救的人占女性人数的 74.2% ，而男性只有 18.89% 获救。这说明，如果给定一个乘客，如果该乘客是一个女性，那么该乘客有很大的概率存活下来。接下来看，船舱等级与是否获救的关系。
+
+df_drop[['Pclass', 'Survived']].groupby('Pclass', as_index=False).mean()
+copy
+
+copy
+PClass 表示船舱的等级，从上面的结果可以看到，等级 1 的存活率最高，等级 3 的存活率最低。可能的原因是，等级 1 坐的大部分都是有钱人，所以存活率要高一些。再来看，登船的港口。
+
+df_drop[['Embarked', 'Survived']].groupby('Embarked', as_index=False).mean()
+copy
+
+copy
+从上面结果可以看出，从港口 C 登船的人，最容易获救，可能的原因是，从不同的港口登船的人会住在不同区域的船舱。而在船的不同区域，存活下来的可能性不一样。再来看，我们之前所提取的名字前缀特征（Title）与是否存活的关系。
+
+df_drop[['Title', 'Survived']].groupby('Title', as_index=False).mean()
+copy
+
+copy
+可以看到，Miss 和 Mrs 最高，而 Mr 最低，因为称呼可能跟性别有关。所以不同的称呼最后存活的可能性不一样。
+
+df_drop[['SibSp', 'Survived']].groupby('SibSp', as_index=False).mean()
+copy
+
+copy
+在列 SibSp 中，0 表示该乘客在船上没有一个兄弟姐妹或配偶。从上面的结果可以看到，有两个或一个存活的可能性较高。
+
+df_drop[['Parch', 'Survived']].groupby('Parch', as_index=False).mean()
+copy
+
+copy
+Parch 列与 SibSp 列类似，其表示的是乘客有多少父母和孩子。有 3 个存活率最高。
+
+df_drop[['FamilySize', 'Survived']].groupby(
+    'FamilySize', as_index=False).mean()
+copy
+
+copy
+可以看到，家庭人数为 4 个人的获救率最高。
+
+df_drop[['IsAlone', 'Survived']].groupby('IsAlone', as_index=False).mean()
+copy
+
+copy
+IsLAlone 表示该乘客是否是单身汉，0 表示不是，1 表示是。从结果可以看到，非单身汉存活率更高。
+
+上面我们只是对数据进行初步的分析，为了更加直观，对一些数据进行可视化。先导入可视化需要的库。
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+%matplotlib inline
+copy
+先来对票价列（Fare）进行可视化，主要画出其箱线图，和其与存活率的关系。
+
+# 定义画布大小
+plt.figure(figsize=[16, 4])
+# 画第一个图
+plt.subplot(121)
+plt.boxplot(x=df_drop['Fare'], showmeans=True, meanline=True)
+# 设置标题和 y 轴的标签
+plt.title('Fare Boxplot')
+plt.ylabel('Fare ($)')
+# 画第二个图
+plt.subplot(122)
+plt.hist(x=[df_drop[df_drop['Survived'] == 1]['Fare'], df_drop[df_drop['Survived'] == 0]['Fare']],
+         stacked=True, color=['g', 'r'], label=['Survived', 'Dead'])
+# 设置标题和坐标轴的标签
+plt.title('Fare Histogram by Survival')
+plt.xlabel('Fare ($)')
+plt.ylabel('# of Passengers')
+plt.legend()
+copy
+
+copy
+从上图可知，大多数乘客的票价都不会超过 100 。此外，从右图可知，票价越低，死亡率越高。同样的方法绘制出年龄（Age）列。
+
+# 定义画布大小
+plt.figure(figsize=[16, 4])
+# 画第一个图
+plt.subplot(121)
+plt.boxplot(x=df_drop['Age'], showmeans=True, meanline=True)
+plt.title('Age Boxplot')
+plt.ylabel('Age ($)')
+# 画第二个图
+plt.subplot(122)
+plt.hist(x=[df_drop[df_drop['Survived'] == 1]['Age'], df_drop[df_drop['Survived'] == 0]['Age']],
+         stacked=True, color=['g', 'r'], label=['Survived', 'Dead'])
+plt.title('Age Histogram by Survival')
+plt.xlabel('Age ($)')
+plt.ylabel('# of Passengers')
+plt.legend()
+copy
+
+copy
+从箱线图可以看出，乘客的年龄主要集中在 30 岁左右，从右图可以看出，30 岁左右的人死亡率最高。
+
+plt.figure(figsize=[16, 4])
+# 画第一个图
+plt.subplot(121)
+plt.boxplot(x=df_drop['FamilySize'], showmeans=True, meanline=True)
+plt.title('FamilySize Boxplot')
+plt.ylabel('FamilySize ($)')
+# 画第二个图
+plt.subplot(122)
+plt.hist(x=[df_drop[df_drop['Survived'] == 1]['FamilySize'], df_drop[df_drop['Survived'] == 0]['FamilySize']],
+         stacked=True, color=['g', 'r'], label=['Survived', 'Dead'])
+plt.title('FamilySize Histogram by Survival')
+plt.xlabel('FamilySize ($)')
+plt.ylabel('# of Passengers')
+plt.legend()
+copy
+
+copy
+从上图可以看出，家庭人数主要集中在 1 到 2 个人。右图显示家庭人数超过 5 个人的，大部分都没有存活下来。
+
+现在通过柱状图来查看，港口（Embarked）、船舱等级（Pclass）、是否单身（IsAlone）的分布情况。
+
+fig, saxis = plt.subplots(1, 3, figsize=(16, 4))
+# 画柱状图
+sns.barplot(x='Embarked', y='Survived', data=df_drop, ax=saxis[0])
+sns.barplot(x='Pclass', y='Survived', order=[
+            1, 2, 3], data=df_drop, ax=saxis[1])
+sns.barplot(x='IsAlone', y='Survived', order=[1, 0], data=df_drop, ax=saxis[2])
+copy
+
+copy
+使用点图来画出票价等级列（FareBin）、年龄等级列（AgeBin）、家庭人数列（FamilySize）。这样便于观察其趋势。
+
+fig, saxis = plt.subplots(1, 3, figsize=(16, 4))
+sns.pointplot(x='FareBin', y='Survived',  data=df_drop, ax=saxis[0])
+sns.pointplot(x='AgeBin', y='Survived',  data=df_drop, ax=saxis[1])
+sns.pointplot(x='FamilySize', y='Survived', data=df_drop, ax=saxis[2])
+copy
+
+copy
+现在画出船舱等级特征和其他特征组合与是否存活的关系。
+
+fig, (axis1, axis2, axis3) = plt.subplots(1, 3, figsize=(16, 5))
+
+sns.boxplot(x='Pclass', y='Fare', hue='Survived', data=df_drop, ax=axis1)
+axis1.set_title('Pclass vs Fare Survival Comparison')
+
+sns.violinplot(x='Pclass', y='Age', hue='Survived',
+               data=df_drop, split=True, ax=axis2)
+axis2.set_title('Pclass vs Age Survival Comparison')
+
+sns.boxplot(x='Pclass', y='FamilySize', hue='Survived', data=df_drop, ax=axis3)
+axis3.set_title('Pclass vs Family Size Survival Comparison')
+copy
+
+copy
+由上图可知，船舱等级为 1 时的票价要高一些，同时存活率也要高一些。
+
+使用柱状图来画出性别特征和其他特征组合及其与是否存活的关系。
+
+fig, qaxis = plt.subplots(1, 3, figsize=(16, 5))
+
+sns.barplot(x='Sex', y='Survived', hue='Embarked', data=df_drop, ax=qaxis[0])
+qaxis[0].set_title('Sex vs Embarked Survival Comparison')
+
+sns.barplot(x='Sex', y='Survived', hue='Pclass', data=df_drop, ax=qaxis[1])
+qaxis[1].set_title('Sex vs Pclass Survival Comparison')
+
+sns.barplot(x='Sex', y='Survived', hue='IsAlone', data=df_drop, ax=qaxis[2])
+qaxis[2].set_title('Sex vs IsAlone Survival Comparison')
+copy
+
+copy
+从上图中可以看到，女性的存活率普遍都高于男性的存活率。但在最右边的图中，男性单身汉死亡率高一点，而非单身汉死亡率要低一些。对于女性正好相反，单身女性的死亡率要低一些。非单身女性死亡率要高一些。
+
+接下来再来看家庭人数与性别组合下是否存活的概率，船舱等级与性别组合下是否存活的概率。
+
+fig, (maxis1, maxis2) = plt.subplots(1, 2, figsize=(16, 5))
+
+
+sns.pointplot(x="FamilySize", y="Survived", hue="Sex", data=df_drop,
+              palette={"male": "blue", "female": "g"},
+              markers=["*", "o"], linestyles=["-", "--"], ax=maxis1)
+
+sns.pointplot(x="Pclass", y="Survived", hue="Sex", data=df_drop,
+              palette={"male": "blue", "female": "g"},
+              markers=["*", "o"], linestyles=["-", "--"], ax=maxis2)
+copy
+
+copy
+由左图可知，在家庭人数在 1 到 4 区间，男性的存活率在增加，而女性的存活率似乎没有太多的变化。而在右图中，船舱等级为 2 到 3 时，男性的存活率变化微小，而女性的存活率在大幅降低。
+
+再来看登船港、船舱等级、乘客性别以及是否存活的关系。
+
+e = sns.FacetGrid(df_drop, col='Embarked')
+e.map(sns.pointplot, 'Pclass', 'Survived', 'Sex', ci=9.0, hue_order=['female','male'], palette='deep')
+e.add_legend()
+copy
+
+copy
+从上图可以很明显地看出，女性的存活率要整体高于男性的存活率。
+
+a = sns.FacetGrid(df_drop, hue='Survived', aspect=4)
+a.map(sns.kdeplot, 'Age', shade=True)
+a.set(xlim=(0, df_drop['Age'].max()))
+a.add_legend()
+copy
+
+copy
+从上图可以看出，登船乘客的年龄大部分为年轻人，死亡人数超过存活人数的群体也都是在 20 岁到 33 岁区间。
+
+h = sns.FacetGrid(df_drop, row='Sex', col='Pclass', hue='Survived')
+h.map(plt.hist, 'Age', alpha=.75)
+h.add_legend()
+copy
+
+copy
+从上图可以看到，年龄在 20 岁到 40 之间，船舱等级为 3 的男性死亡率最高。
+
+上主要完成组合特征与是否存活的关系，当然我们也可以查看特征之间的关系。
+
+pp = sns.pairplot(df_drop, hue='Survived', palette='deep', height=1.5,
+                  diag_kind='kde', diag_kws=dict(shade=True), plot_kws=dict(s=10))
+pp.set(xticklabels=[])
+copy
+
+copy
+除了上面画图的方法，我们还可以使用一些方法来求出特征之间的相关系数，然后通过热图的方法画出。
+
+def correlation_heatmap(df):
+    _, ax = plt.subplots(figsize=(10, 8))  # 设置画布大小
+
+    colormap = sns.diverging_palette(220, 10, as_cmap=True)  # 设置画图颜色
+
+    _ = sns.heatmap(          # 画出热图
+        df.corr(),
+        cmap=colormap,
+        square=True,
+        cbar_kws={'shrink': .9},
+        ax=ax,
+        annot=True,
+        linewidths=0.1, vmax=1.0, linecolor='white',
+        annot_kws={'fontsize': 12}
+    )
+    # 设置标题
+    plt.title('Pearson Correlation of Features', y=1.05, size=15)
+
+
+correlation_heatmap(df_drop)
+copy
+
+copy
+在上图中，数值越接近于 1 表示越正相关，越接近于 -1 表示越负相关。
+
+数据转换
+到目前为止，我们已经完成了数据清洗和数据分析。接下来准备构建预测模型。由于经过上面的数据预处理之后，数据中还是存在一些用字符串来表示的类别型特征，因此在构建模型之前先将这些字符串转化为数值。这里之间使用 sklearn 提供的接口来完成。
+
+from sklearn.preprocessing import LabelEncoder
+label = LabelEncoder()
+df_drop['Sex_Code'] = label.fit_transform(df_drop['Sex'])
+df_drop['Embarked_Code'] = label.fit_transform(df_drop['Embarked'])
+df_drop['Title_Code'] = label.fit_transform(df_drop['Title'])
+df_drop['AgeBin_Code'] = label.fit_transform(df_drop['AgeBin'])
+df_drop['FareBin_Code'] = label.fit_transform(df_drop['FareBin'])
+copy
+
+copy
+转换完成之后，查看一下目前的数据集。
+
+df_drop.head()
+copy
+
+copy
+查看一下此时数据的形状。
+
+df_drop.shape
+copy
+
+copy
+目前数据总共含有 19 列特征。来查看一下，都有哪些特征列。
+
+df_drop.columns
+copy
+
+copy
+在上面的显示结果中，从 Survived 列到 Embarked 列为原始数据的特征列，后面的特征列为我们所提取或构件的特征列。其中含 Code 的列只是将对应的列转化为数字而已。
+
+在训练模型时，我们仅选择使用一部分的特征列来训练。
+
+feat_cols = ['Sex_Code', 'Pclass', 'Embarked_Code',
+             'Title_Code', 'FamilySize', 'AgeBin_Code', 'FareBin_Code']
+target = 'Survived'
+copy
+
+copy
+提取训练特征集。
+
+data_X = df_drop[feat_cols]
+data_X.head()
+copy
+
+copy
+提取训练对应的目标值。
+
+data_y = df_drop[target]
+data_y.head()
+copy
+
+copy
+构建预测模型
+在构建模型之前，先划分训练集和测试集。
+
+from sklearn import model_selection
+
+train_x, test_x, train_y, test_y = model_selection.train_test_split(data_X.values,
+                                                                    data_y.values,
+                                                                    random_state=0)
+copy
+
+copy
+构建模型，这里先使用  逻辑回归 来完成。
+
+from sklearn.linear_model import LogisticRegression
+
+model = LogisticRegression(solver='lbfgs')
+model.fit(train_x, train_y)
+copy
+
+copy
+在训练好模型之后，使用测试集来对模型进行测试。
+
+from sklearn import metrics
+y_pred = model.predict(test_x)
+metrics.accuracy_score(y_pred, test_y)
+copy
+
+copy
+从测试集的结果来看，使用逻辑回归得到的准确率没有达到 80% ，这里我们换一种常用的分类方法： 支持向量机 。
+
+from sklearn.svm import SVC
+
+model = SVC(probability=True, gamma='auto')
+model.fit(train_x, train_y)
+y_pred = model.predict(test_x)
+metrics.accuracy_score(y_pred, test_y)
+copy
+
+copy
+从上面的结果可以看到，支持向量机比逻辑回归的结果稍微好一点点。但还是不理想。我们再换另一种方法： 随机森林。
+
+from sklearn.ensemble import RandomForestClassifier
+
+model = RandomForestClassifier(n_estimators=100)
+model.fit(train_x, train_y)
+y_pred = model.predict(test_x)
+metrics.accuracy_score(y_pred, test_y)
+copy
+
+copy
+从测试集的结果可以看出随机森林相比于支持向量机和逻辑回归的效果好很多。
+
+实验总结
+本次实验主要讲解泰坦尼克号数据的分析过程，具体为，数据清洗、数据预处理、特征工程、数据可视化、建立模型等。在数据可视化中，使用到了许多的可视化技巧，可能你会觉得有些陌生，不过这没有关系，在你自己使用时，会查阅官方文档即可。在构建模型时，我们主要使用了三种方法，分别是逻辑回归、支持向量机、随机森林。这些方法都涉及到复杂的数学推导，这里是直接调用。如果你有兴趣，可以自行查阅相关的资料。
+
+ 相关链接
+
+ Kaggle Titanic
+ Titanic Supervised Survivor Prediction
+ A Data Science Framework: To Achieve 99% Accuracy
+©️ 本课程内容，由作者授权蓝桥云课发布，未经允许，禁止转载、下载及非法传播。
+点击下方环境窗口，开启实战
+默认环境
+

@@ -1,0 +1,7 @@
+tensorflow/.ipynb_checkpoints/
+tensorflow/logs/
+*.jpg
+fraud_prediction/datasets/train.csv
+tensorflow/inception_v3_weights_tf_dim_ordering_tf_kernels_notop.h5
+abcnews-date-text.csv
+aliyun_detection/datasets/
